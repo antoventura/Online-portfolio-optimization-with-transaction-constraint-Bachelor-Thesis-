@@ -1,68 +1,19 @@
 import numpy as np
 import pandas as pd
+from Portfolio5 import Portfolio
+from Opt import HedgeAlgorithm, OnlineGradientDescent
 
-class OnlinePortfolioSelection:
+class OnlinePortfolioSelection(Portfolio):
     
     def __init__(self,stock,returns,eta):
+        super().__init__(stock,returns,eta,"Online Portfolio")
         self.stocks = stock
-        self.budget = 10**5
-        self.transaction_cost = 10
         self.returns = returns
         
-        weights = np.array([1 / (len(stock.columns)) ] * (len(stock.columns)))   #uniform distribution at the start 
-        initial_stocks = weights * self.budget / self.stocks.iloc[0]
-        self.initial_stocks = np.floor(initial_stocks)
-        self.remaining_budget = self.budget - np.sum(self.initial_stocks * self.stocks.iloc[0])
-        self.weights = self.initial_stocks * self.stocks.iloc[0] / (self.budget - self.remaining_budget)
-        
-        self.cumulative_regret = 0
-        
-        
-        #initialize lambda = 0
-        self.Lambda = 0
-        
-        self.eta = eta
-        
-        self.transaction_cost_budget = 1000
-        
-        
-        
-    def transaction_costs(self,time=2,mode = "single transaction",budget = None, 
-                         transaction_cost = None, initial_stocks = None, perc = 0.2, new_stocks = [],visualize = True):
-        
-        if budget is None:
-            budget = self.budget
-        if transaction_cost is None:
-            transaction_cost = self.transaction_cost
-        if initial_stocks is None:
-            initial_stocks = self.initial_stocks
 
-
-        diff = np.abs(initial_stocks - new_stocks)
-
-        #Counting each transaction as unique, without considering the amount of stocks, but just how many different stocks we trade
-        if mode == "single transaction":
-            if visualize:
-                print(f"for time = {time} we had {(diff != 0).sum()} transactions")
-            return (diff != 0).sum() * transaction_cost
-
-        #Counting each stock as a transaction
-        if mode == "single stock":
-            if visualize:
-                print(f"for time = {time} we had {diff.sum()} transactions")
-            return  diff.sum() *transaction_cost
-
-        #Counting each stock as a transaction but with the percentage of the value of the stock
-        if mode == "percentage":
-            if visualize:
-                print(f"for time = {time} we had {diff.sum()} transactions")
-            return (diff * self.stocks.iloc[time] * perc / 100).sum()
-    
-    
-    
     def loss(self,t):
         
-        #this because i have to udnerstand how to calculate transaction_cost without new weights
+        #this because I have to understand how to calculate transaction_cost without new weights
         p = 1000 / len(self.stocks.columns)
         if self.Lambda != 0:
             #loss = self.returns.iloc[t] + (self.Lambda * (self.budget - self.tr))
@@ -119,23 +70,35 @@ class OnlinePortfolioSelection:
             if visualize:
                 print(f"The weights have been updated and the new cost budget is {self.transaction_cost_budget}")
             
-        #if we don't have enuough budget:
+        #if we don't have enough budget:
         else:
             self.portfolio = self.initial_stocks
             
             self.budget = np.sum(self.portfolio * self.stocks.iloc[t+1]) + self.remaining_budget
-
-
-            
+  
             print(f"the transaction cost is too high, the weights did not update")
+    
+    
+    def run(self):
+        
+        hedgeSP100 = HedgeAlgorithm(len(self.stocks.columns) )
+        ogdSP100 = OnlineGradientDescent(num_stocks = len(self.stocks.columns) , learning_rate = self.eta )
+        
+        p = self.transaction_cost_budget / len(self.stocks.columns)
+        
+        for t in range(1,len(self.stocks)-1):
+            
+            self.cumulative_wealth.append(self.budget)
+            #find new weights using hedge
+            hedgeSP100.update_weights(self.weights,self.loss(t), learning_rate = self.eta)  
+            hedge_weights = hedgeSP100.get_weights()
+
+            #Check if the new weights don't exceed the cost budget and update the portfolio
+            self.rebalance_portfolio(t=t,new_weights = hedge_weights,mode = "percentage",visualize = False)
+
+            #Update dual player strategy
+            ogdSP100.update_lambda(p,self.tr)   
+            self.Lambda = ogdSP100.get_lambda()
             
         
-        
-        
-    
-    
-    
-        
-        #remaining_budget = budget - np.sum(positions)
-        #self.weights = positions / np.sum(positions)
-        
+
